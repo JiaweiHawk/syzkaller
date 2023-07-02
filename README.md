@@ -1,44 +1,70 @@
 # syzkaller - kernel fuzzer
 
-[![CI Status](https://github.com/google/syzkaller/workflows/ci/badge.svg)](https://github.com/google/syzkaller/actions?query=workflow/ci)
-[![OSS-Fuzz](https://oss-fuzz-build-logs.storage.googleapis.com/badges/syzkaller.svg)](https://bugs.chromium.org/p/oss-fuzz/issues/list?q=label:Proj-syzkaller)
-[![Go Report Card](https://goreportcard.com/badge/github.com/google/syzkaller)](https://goreportcard.com/report/github.com/google/syzkaller)
-[![Coverage Status](https://codecov.io/gh/google/syzkaller/graph/badge.svg)](https://codecov.io/gh/google/syzkaller)
-[![GoDoc](https://godoc.org/github.com/google/syzkaller?status.svg)](https://godoc.org/github.com/google/syzkaller)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+参考[syzkaller教程](https://i-m.dev/posts/20200313-143737.html)
 
-`syzkaller` (`[siːzˈkɔːlə]`) is an unsupervised coverage-guided kernel fuzzer.\
-Supported OSes: `Akaros`, `FreeBSD`, `Fuchsia`, `gVisor`, `Linux`, `NetBSD`, `OpenBSD`, `Windows`.
+1. 配置go环境
 
-Mailing list: [syzkaller@googlegroups.com](https://groups.google.com/forum/#!forum/syzkaller) (join on [web](https://groups.google.com/forum/#!forum/syzkaller) or by [email](mailto:syzkaller+subscribe@googlegroups.com)).
+```bash
+wget -O go.tar.gz https://go.dev/dl/go1.20.5.linux-amd64.tar.gz
+tar -C ~ -xvf go.tar.gz
+echo "export GOROOT=$HOME/go
+export PATH=\$GOROOT/bin:\$PATH" | tee -a ~/.bashrc
+```
 
-Found bugs: [Akaros](docs/akaros/found_bugs.md), [Darwin/XNU](docs/darwin/README.md), [FreeBSD](docs/freebsd/found_bugs.md), [Linux](docs/linux/found_bugs.md), [NetBSD](docs/netbsd/found_bugs.md), [OpenBSD](docs/openbsd/found_bugs.md), [Windows](docs/windows/README.md).
+2. 编译syzkaller
+```bash
+cd `/path/to/syzkaller`
+git clone https://github.com/JiaweiHawk/syzkaller.git
+cd syzkaller
+make
+```
 
-## Documentation
+2. 制作系统镜像
+```bash
+cd `/path/to/image`
+`/path/to/syzkaller`/syzkaller/tools/create-image.sh -s 2048
+```
 
-Initially, syzkaller was developed with Linux kernel fuzzing in mind, but now
-it's being extended to support other OS kernels as well.
-Most of the documentation at this moment is related to the [Linux](docs/linux/setup.md) kernel.
-For other OS kernels check:
-[Akaros](docs/akaros/README.md),
-[Darwin/XNU](docs/darwin/README.md),
-[FreeBSD](docs/freebsd/README.md),
-[Fuchsia](docs/fuchsia/README.md),
-[NetBSD](docs/netbsd/README.md),
-[OpenBSD](docs/openbsd/setup.md),
-[Starnix](docs/starnix/README.md),
-[Windows](docs/windows/README.md),
-[gVisor](docs/gvisor/README.md).
+3. 编译内核
+```bash
+cd `/path/to/kernel`
+git clone git://mirrors.ustc.edu.cn/linux.git
+cd linux
+make defconfig
+./scripts/config --enable CONFIG_KCOV && yes "" | make oldconfig
+./scripts/config --enable CONFIG_DEBUG_INFO_DWARF5 && yes "" | make oldconfig
+./scripts/config --enable CONFIG_KASAN && yes "" | make oldconfig
+./scripts/config --enable CONFIG_KASAN_INLINE && yes "" | make oldconfig
+./scripts/config --enable CONFIG_CONFIGFS_FS && yes "" | make oldconfig
+./scripts/config --enable CONFIG_SECURITYFS && yes "" | make oldconfig
+make -j $(nproc)
+```
 
-- [How to install syzkaller](docs/setup.md)
-- [How to use syzkaller](docs/usage.md)
-- [How syzkaller works](docs/internals.md)
-- [How to install syzbot](docs/setup_syzbot.md)
-- [How to contribute to syzkaller](docs/contributing.md)
-- [How to report Linux kernel bugs](docs/linux/reporting_kernel_bugs.md)
-- [Tech talks and articles](docs/talks.md)
-- [Research work based on syzkaller](docs/research.md)
-
-## Disclaimer
-
-This is not an official Google product.
+4. 运行syzkaller
+```
+echo "{
+    "target": "linux/amd64",
+    "http": "127.0.0.1:8080",
+    "workdir": "`/path/to/workdir`",
+    "kernel_obj": "`/path/to/kernel`/linux",
+    "kernel_src": "`/path/to/kernel`/linux",
+    "image": "`/path/to/image`/bullseye.img",
+    "sshkey": "`/path/to/image`/bullseye.id_rsa",
+    "syzkaller": "`/path/to/syzkaller`/syzkaller",
+    "enable_syscalls": [
+        "open$test",
+        "close$test"
+    ],
+    "procs": 1,
+    "type": "qemu",
+    "sandbox": "setuid",
+    "vm": {
+        "count": 1,
+        "kernel": "`/path/to/kernel`/linux/arch/x86/boot/bzImage",
+        "cmdline": "net.ifnames=0",
+        "cpu": 1,
+        "mem": 2048
+    }
+}" | tee `/path/to/config`/config
+`/path/to/syzkaller`/bin/syz-manager -config `/path/to/config`/config
+```

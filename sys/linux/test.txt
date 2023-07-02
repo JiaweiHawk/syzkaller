@@ -1,0 +1,4 @@
+include <linux/fs.h>
+
+open$test(file ptr[in, string["/test"]], flags const[64], mode const[0]) fd
+close$test(fd fd)

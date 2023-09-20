@@ -431,7 +431,8 @@ func (inst *instance) boot() error {
 		"-chardev", fmt.Sprintf("socket,id=SOCKSYZ,server=on,wait=off,host=localhost,port=%v", inst.monport),
 		"-mon", "chardev=SOCKSYZ,mode=control",
 		"-display", "none",
-		"-serial", fmt.Sprintf("file:%s", fmt.Sprintf("log_%d", time.Now().Unix())),
+		"-serial", fmt.Sprintf("file:%s", filepath.Join(inst.workdir,
+											fmt.Sprintf("log_%d", time.Now().Unix()))),
 		"-no-reboot",
 		"-name", fmt.Sprintf("VM-%v", inst.index),
 	}
